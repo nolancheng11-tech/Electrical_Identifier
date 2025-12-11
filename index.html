@@ -1,59 +1,178 @@
-<div>Teachable Machine Image Model</div>
-<button type="button" onclick="init()">Start</button>
-<div id="webcam-container"></div>
-<div id="label-container"></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EE Lab Assistant – Component Identifier</title>
+
+<!-- Technical / engineering style -->
+<style>
+    body {
+        font-family: "Courier New", monospace;
+        background-color: #0f0f0f;
+        color: #e0e0e0;
+        margin: 0;
+        padding: 20px;
+    }
+
+    h1 {
+        color: #00eaff;
+        border-bottom: 2px solid #00eaff;
+        padding-bottom: 8px;
+        margin-bottom: 20px;
+    }
+
+    button {
+        background-color: #00eaff;
+        color: #000;
+        border: none;
+        padding: 10px 20px;
+        font-size: 16px;
+        margin-bottom: 15px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    button:hover {
+        background-color: #009bb8;
+    }
+
+    #container {
+        display: flex;
+        gap: 30px;
+        margin-top: 20px;
+    }
+
+    #webcam-container {
+        border: 2px solid #00eaff;
+        padding: 10px;
+    }
+
+    #info-panel {
+        max-width: 350px;
+        border-left: 2px solid #00eaff;
+        padding-left: 20px;
+    }
+
+    .label {
+        font-size: 16px;
+        padding: 3px 0;
+    }
+
+    .title-small {
+        color: #00eaff;
+        margin: 10px 0 5px 0;
+        font-weight: bold;
+        font-size: 18px;
+    }
+
+    #explanation-box {
+        margin-top: 10px;
+        background: #111;
+        border: 1px solid #00eaff;
+        padding: 10px;
+        min-height: 120px;
+    }
+</style>
+</head>
+
+<body>
+
+<h1>EE Lab Assistant – Component Identifier</h1>
+
+<p>
+    This tool helps beginner electrical engineers quickly identify basic circuit 
+    components using a Teachable Machine model trained on <strong>wires, resistors, and capacitors</strong>. 
+    Hold a component up to your camera and the Lab Assistant will recognize it and 
+    provide a short explanation.
+</p>
+
+<button type="button" onclick="init()">Start Camera</button>
+
+<div id="container">
+    <div id="webcam-container"></div>
+    
+    <div id="info-panel">
+        <div class="title-small">Live Prediction:</div>
+        <div id="label-container"></div>
+
+        <div class="title-small">Component Information:</div>
+        <div id="explanation-box">
+            Hold a component up to the camera to learn more about it.
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-<script type="text/javascript">
-    // More API functions here:
-    // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
 
-    // the link to your model provided by Teachable Machine export panel
+<script>
     const URL = "./my_model/";
 
     let model, webcam, labelContainer, maxPredictions;
 
-    // Load the image model and setup the webcam
+    // Short explanations for components
+    const explanations = {
+        "Wire": "Wires allow electrical current to flow between components. They do not add resistance and are used to create connections on a breadboard or circuit.",
+        "Resistor": "A resistor limits current in a circuit. Its value is measured in ohms (Ω). It protects LEDs and controls voltage and current levels.",
+        "Capacitor (Small)": "Small ceramic capacitors store tiny amounts of electrical energy and help smooth voltage or remove noise in circuits.",
+        "Capacitor (Large)": "Larger electrolytic capacitors store more energy. They have polarity (positive and negative leads) and are used for filtering and stabilizing power."
+    };
+
     async function init() {
         const modelURL = URL + "model.json";
         const metadataURL = URL + "metadata.json";
 
-        // load the model and metadata
-        // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
-        // or files from your local hard drive
-        // Note: the pose library adds "tmImage" object to your window (window.tmImage)
         model = await tmImage.load(modelURL, metadataURL);
         maxPredictions = model.getTotalClasses();
 
-        // Convenience function to setup a webcam
-        const flip = true; // whether to flip the webcam
-        webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
-        await webcam.setup(); // request access to the webcam
+        const flip = true;
+        webcam = new tmImage.Webcam(200, 200, flip);
+        await webcam.setup();
         await webcam.play();
         window.requestAnimationFrame(loop);
 
-        // append elements to the DOM
         document.getElementById("webcam-container").appendChild(webcam.canvas);
         labelContainer = document.getElementById("label-container");
-        for (let i = 0; i < maxPredictions; i++) { // and class labels
-            labelContainer.appendChild(document.createElement("div"));
+
+        for (let i = 0; i < maxPredictions; i++) {
+            const div = document.createElement("div");
+            div.classList.add("label");
+            labelContainer.appendChild(div);
         }
     }
 
     async function loop() {
-        webcam.update(); // update the webcam frame
+        webcam.update();
         await predict();
         window.requestAnimationFrame(loop);
     }
 
-    // run the webcam image through the image model
     async function predict() {
-        // predict can take in an image, video or canvas html element
         const prediction = await model.predict(webcam.canvas);
+
+        // Find highest prediction
+        let best = {className: "", prob: 0};
+
         for (let i = 0; i < maxPredictions; i++) {
-            const classPrediction =
-                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-            labelContainer.childNodes[i].innerHTML = classPrediction;
+            const p = prediction[i].probability.toFixed(2);
+            const name = prediction[i].className;
+
+            labelContainer.childNodes[i].innerHTML =
+                `${name}: ${p}`;
+
+            if (p > best.prob) {
+                best = {className: name, prob: p};
+            }
+        }
+
+        // Update explanation box if prediction is strong
+        if (best.prob > 0.60 && explanations[best.className]) {
+            document.getElementById("explanation-box").innerHTML =
+                `<strong>${best.className}</strong><br>${explanations[best.className]}`;
         }
     }
 </script>
+
+</body>
+</html>
